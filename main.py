@@ -331,16 +331,36 @@ async def simulate_normal_activity():
         context={"value": 120.5, "historical_avg": 115.0}
     ))
 
-    # Successful logins from usual locations
+    # Successful logins from usual locations during a minute threshold
     for i, loc in enumerate(user_profiles[normal_user]["usual_locations"]):
         instrument(Event(
             event_name="login_attempt",
             user_role="USER",
             user_id=normal_user,
             source_id=f"192.168.1.{100+i}",
-            timestamp=now - timedelta(minutes=10-i),
+            timestamp=now,
             context={"success": True, "location": loc}
         ))
+
+    # Successful logins from two locations(diffrence > 500m) time gap > minute threshold - Step 1
+    instrument(Event(
+        event_name="login_attempt",
+        user_role="USER",
+        user_id="user_normal_567",
+        source_id="192.168.5.100",
+        timestamp=now,
+        context={"success": True, "location": "41.7178,-73.0060"}
+    ))
+
+    # Successful logins from two locations(diffrence > 500m) time gap > minute threshold - Step 2
+    instrument(Event(
+        event_name="login_attempt",
+        user_role="USER",
+        user_id="user_normal_567",
+        source_id="192.168.5.100",
+        timestamp=now + timedelta(minutes=2),
+        context={"success": True, "location": "51.7178,-83.0060"}
+    ))
     
     return {"status": "simulated normal activity"}
 
@@ -433,7 +453,7 @@ async def simulate_attack_activity():
         user_role="USER",
         user_id=attacker_user,
         source_id="192.168.5.100",
-        timestamp=now + timedelta(minutes=2),
+        timestamp=now + timedelta(seconds=10),
         context={"success": True, "location": "51.7178,-83.0060"}
     ))
     
