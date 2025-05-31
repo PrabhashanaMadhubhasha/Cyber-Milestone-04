@@ -311,13 +311,14 @@ async def simulate_normal_activity():
     ))
     
     # Normal device toggles
+    usual_time = now.replace(hour=9)
     for i in range(2):
         instrument(Event(
             event_name="toggle_device",
             user_role="USER",
             user_id=normal_user,
             source_id="192.168.1.100",
-            timestamp=now - timedelta(minutes=9, seconds=30-i),
+            timestamp=usual_time - timedelta(minutes=9, seconds=30-i),
             context={"device": "light_1", "state": "on" if i%2==0 else "off"}
         ))
     
