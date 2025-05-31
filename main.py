@@ -309,6 +309,17 @@ async def simulate_normal_activity():
         timestamp=now - timedelta(minutes=10),
         context={"success": True, "location": "40.7128,-74.0060"}
     ))
+
+    # Failed login attempts
+    for i in range(6):
+        instrument(Event(
+            event_name="login_attempt",
+            user_role="USER",
+            user_id=normal_user,
+            source_id="192.168.1.666",
+            timestamp=now - timedelta(seconds=50-i*10),
+            context={"success": True}
+        ))
     
     # Normal device toggles
     usual_time = now.replace(hour=9)
