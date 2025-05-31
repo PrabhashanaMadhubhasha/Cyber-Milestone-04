@@ -417,7 +417,7 @@ async def simulate_attack_activity():
         context={"new_role": "ADMIN"}
     ))
     
-    # Geographic anomaly
+    # Geographic anomaly - Step 1
     instrument(Event(
         event_name="login_attempt",
         user_role="USER",
@@ -425,6 +425,16 @@ async def simulate_attack_activity():
         source_id="192.168.5.100",
         timestamp=now,
         context={"success": True, "location": "41.7178,-73.0060"}
+    ))
+
+    # Geographic anomaly - Step 2
+    instrument(Event(
+        event_name="login_attempt",
+        user_role="USER",
+        user_id=attacker_user,
+        source_id="192.168.5.100",
+        timestamp=now + timedelta(minutes=2),
+        context={"success": True, "location": "51.7178,-83.0060"}
     ))
     
     # Device impersonation
