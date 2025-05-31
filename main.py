@@ -310,7 +310,7 @@ async def simulate_normal_activity():
         context={"success": True, "location": "40.7128,-74.0060"}
     ))
 
-    # Failed login attempts
+    # Passed login attempts with "success" = True
     for i in range(6):
         instrument(Event(
             event_name="login_attempt",
