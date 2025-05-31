@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import uuid
 from collections import defaultdict
-import unittest
+import math
 
 app = FastAPI()
 
@@ -36,7 +36,8 @@ DETECTION_CONFIG = {
         "message": "Activity detected outside business hours"
     },
     "geo_anomaly": {
-        "distance_threshold_km": 500,
+        "distance_threshold_m": 500,  # Changed from km to meters
+        "time_window": timedelta(minutes=5),  # Added time window
         "message": "Login from unusual location detected"
     },
     "device_impersonation": {
@@ -80,19 +81,22 @@ def is_business_hours(timestamp: datetime) -> bool:
     return (DETECTION_CONFIG["unusual_time"]["start_business_hours"] <= hour < 
             DETECTION_CONFIG["unusual_time"]["end_business_hours"])
 
-def calculate_distance(loc1: str, loc2: str) -> float:
-    """Simplified distance calculation (in km) for demo purposes"""
-    from math import radians, sin, cos, sqrt, atan2
-    lat1, lon1 = map(radians, map(float, loc1.split(',')))
-    lat2, lon2 = map(radians, map(float, loc2.split(',')))
+def calculate_distance_meters(loc1: str, loc2: str) -> float:
+    """Calculate distance between two coordinates in meters"""
+    lat1, lon1 = map(float, loc1.split(','))
+    lat2, lon2 = map(float, loc2.split(','))
     
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
+    # Approximate calculation (Haversine formula)
+    R = 6371000  # Earth radius in meters
+    φ1 = math.radians(lat1)
+    φ2 = math.radians(lat2)
+    Δφ = math.radians(lat2 - lat1)
+    Δλ = math.radians(lon2 - lon1)
+
+    a = math.sin(Δφ/2) * math.sin(Δφ/2) + math.cos(φ1) * math.cos(φ2) * math.sin(Δλ/2) * math.sin(Δλ/2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     
-    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-    c = 2 * atan2(sqrt(a), sqrt(1-a))
-    
-    return 6371 * c  # Earth radius in km
+    return R * c
 
 def instrument(event: Event):
     if event.timestamp is None:
@@ -214,12 +218,29 @@ def check_geo_anomalies(event: Event):
         user_profiles[event.user_id]["usual_locations"] = [location]
         return
     
-    distances = [calculate_distance(loc, location) for loc in usual_locations]
-    min_distance = min(distances) if distances else float('inf')
+    # Check for logins from unusual locations within the time window
+    time_window = DETECTION_CONFIG["geo_anomaly"]["time_window"]
+    cutoff = event.timestamp - time_window
     
-    if min_distance > DETECTION_CONFIG["geo_anomaly"]["distance_threshold_km"]:
-        log_attack(event, "geo_anomaly", 
-                  f"Login from unusual location {location} (distance: {min_distance:.1f} km)")
+    # Get all logins from this user in the time window
+    recent_logins = [
+        e for e in event_history
+        if e.event_name == "login_attempt"
+        and e.user_id == event.user_id
+        and e.timestamp >= cutoff
+        and e.context.get("success")
+        and "location" in e.context
+    ]
+    
+    # Check distance for each recent login
+    for login in recent_logins:
+        login_loc = login.context["location"]
+        distance = calculate_distance_meters(login_loc, location)
+        
+        if distance > DETECTION_CONFIG["geo_anomaly"]["distance_threshold_m"]:
+            log_attack(event, "geo_anomaly", 
+                      f"Login from unusual location {location} (distance: {distance:.1f}m from {login_loc})")
+            break
 
 def check_device_impersonation(event: Event):
     if event.event_name not in ["toggle_device", "adjust_device"]:
@@ -272,7 +293,8 @@ async def simulate_normal_activity():
     """Simulate normal user activity"""
     normal_user = "user_normal_123"
     user_profiles[normal_user] = {
-        "usual_locations": ["40.7128,-74.0060"],
+        # Coordinates within 500m of each other (New York City area)
+        "usual_locations": ["40.7128,-74.0060", "40.7125,-74.0062", "40.7130,-74.0058"],
         "authorized_devices": ["192.168.1.100", "smart_meter_1"]
     }
     
@@ -308,6 +330,17 @@ async def simulate_normal_activity():
         timestamp=now - timedelta(minutes=8),
         context={"value": 120.5, "historical_avg": 115.0}
     ))
+
+    # Successful logins from usual locations
+    for i, loc in enumerate(user_profiles[normal_user]["usual_locations"]):
+        instrument(Event(
+            event_name="login_attempt",
+            user_role="USER",
+            user_id=normal_user,
+            source_id=f"192.168.1.{100+i}",
+            timestamp=now - timedelta(minutes=10-i),
+            context={"success": True, "location": loc}
+        ))
     
     return {"status": "simulated normal activity"}
 
@@ -316,7 +349,7 @@ async def simulate_attack_activity():
     """Simulate various attack scenarios"""
     attacker_user = "user_attacker_456"
     user_profiles[attacker_user] = {
-        "usual_locations": ["37.7749,-122.4194"],
+        "usual_locations": ["40.7128,-74.0060"],  # New York
         "authorized_devices": ["192.168.1.200"]
     }
     
@@ -391,7 +424,7 @@ async def simulate_attack_activity():
         user_id=attacker_user,
         source_id="192.168.5.100",
         timestamp=now,
-        context={"success": True, "location": "51.5074,-0.1278"}  # London
+        context={"success": True, "location": "40.7178,-74.0060"}  # ~550m north of usual location
     ))
     
     # Device impersonation
