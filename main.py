@@ -37,7 +37,7 @@ DETECTION_CONFIG = {
     },
     "geo_anomaly": {
         "distance_threshold_m": 500,  # Changed from km to meters
-        "time_window": timedelta(minutes=5),  # Added time window
+        "time_window": timedelta(minutes=1),  # Added time window
         "message": "Login from unusual location detected"
     },
     "device_impersonation": {
@@ -424,7 +424,7 @@ async def simulate_attack_activity():
         user_id=attacker_user,
         source_id="192.168.5.100",
         timestamp=now,
-        context={"success": True, "location": "40.7178,-74.0060"}  # ~550m north of usual location
+        context={"success": True, "location": "41.7178,-73.0060"}
     ))
     
     # Device impersonation
